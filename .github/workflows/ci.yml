@@ -1,0 +1,30 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Build
+        run: make build
+
+      - name: Test with race detector
+        run: make test
+
+      - name: Benchmark smoke run
+        run: go test -bench=. -benchtime=1x ./tests/benchmark/...

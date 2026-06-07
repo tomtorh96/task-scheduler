@@ -1,0 +1,12 @@
+﻿bin/
+dist/
+*.test
+*.out
+coverage.html
+.env
+.env.local
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
