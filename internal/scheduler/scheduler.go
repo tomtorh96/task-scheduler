@@ -87,10 +87,10 @@ func (s *Scheduler) Cancel(id string) error {
 	if err != nil {
 		return err
 	}
-	if job.Status != pool.StatusPending {
+	if job.GetStatus() != pool.StatusPending {
 		return ErrJobNotCancellable
 	}
-	job.Status = pool.StatusCancelled
+	job.SetStatus(pool.StatusCancelled)
 	metrics.JobsCancelled.Inc()
 	metrics.QueueDepth.Dec()
 	return nil
@@ -126,7 +126,7 @@ func (s *Scheduler) ListJobs(status pool.Status) []*pool.Job {
 	defer s.mu.RUnlock()
 	result := make([]*pool.Job, 0, len(s.jobs))
 	for _, job := range s.jobs {
-		if status == "" || job.Status == status {
+		if status == "" || job.GetStatus() == status {
 			result = append(result, job)
 		}
 	}

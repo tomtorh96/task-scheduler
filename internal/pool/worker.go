@@ -40,7 +40,7 @@ func (w *Worker) Start() {
 				}
 				w.mutex.Lock()
 				w.active = true
-				job.Status = StatusRunning
+				job.SetStatus(StatusRunning)
 				job.StartedAt = time.Now()
 				metrics.JobQueueWait.Observe(time.Since(job.CreatedAt).Seconds())
 				metrics.ActiveWorkers.Inc()
@@ -51,23 +51,23 @@ func (w *Worker) Start() {
 				metrics.JobDuration.Observe(time.Since(job.StartedAt).Seconds())
 				metrics.ActiveWorkers.Dec()
 				metrics.QueueDepth.Dec()
-				job.Attempt++
+				attempt := job.IncrementAttempt()
 				if err != nil {
-					if job.Attempt < job.MaxRetries {
-						delay := backoff.Calculate(job.Attempt, backoff.DefaultConfig())
+					if attempt < job.MaxRetries {
+						delay := backoff.Calculate(attempt, backoff.DefaultConfig())
 						go func() {
 							time.Sleep(delay)
 							w.queue.Enqueue(job, job.Priority)
 						}()
 					} else {
-						job.Status = StatusFailed
+						job.SetStatus(StatusFailed)
 						job.Err = err
 						job.FinishedAt = time.Now()
 						metrics.JobsFailed.Inc()
 						w.onFailed()
 					}
 				} else {
-					job.Status = StatusDone
+					job.SetStatus(StatusDone)
 					job.FinishedAt = time.Now()
 					metrics.JobsCompleted.Inc()
 					w.onComplete()

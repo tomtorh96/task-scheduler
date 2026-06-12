@@ -1,6 +1,9 @@
 ﻿package pool
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type Status string
 
@@ -23,4 +26,30 @@ type Job struct {
 	StartedAt  time.Time
 	FinishedAt time.Time
 	Err        error
+	mu         sync.RWMutex
+}
+
+func (j *Job) GetStatus() Status {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	return j.Status
+}
+
+func (j *Job) SetStatus(s Status) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.Status = s
+}
+
+func (j *Job) GetAttempt() int {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	return j.Attempt
+}
+
+func (j *Job) IncrementAttempt() int {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.Attempt++
+	return j.Attempt
 }
