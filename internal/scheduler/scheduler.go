@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tomtorh96/task-scheduler/internal/metrics"
 	"github.com/tomtorh96/task-scheduler/internal/pool"
 	"github.com/tomtorh96/task-scheduler/internal/queue"
 )
@@ -46,10 +47,12 @@ func (s *Scheduler) Start() {
 // exits when quit is closed
 func (s *Scheduler) dispatch() {
 	for {
-		job, ok := s.queue.Dequeue()
+		value, ok := s.queue.Dequeue()
+
 		if !ok {
 			return // queue is closed, exit the dispatch loop
 		}
+		job := value.(*pool.Job)
 		s.pool.Submit(job)
 	}
 }
@@ -68,6 +71,8 @@ func (s *Scheduler) Submit(fn func() error, priority int, maxRetries int) (strin
 	}
 	s.queue.Enqueue(job, priority)
 	s.mu.Lock()
+	metrics.JobsSubmitted.Inc()
+	metrics.QueueDepth.Inc()
 	s.jobs[job.ID] = job
 	s.mu.Unlock()
 
@@ -86,6 +91,8 @@ func (s *Scheduler) Cancel(id string) error {
 		return ErrJobNotCancellable
 	}
 	job.Status = pool.StatusCancelled
+	metrics.JobsCancelled.Inc()
+	metrics.QueueDepth.Dec()
 	return nil
 }
 

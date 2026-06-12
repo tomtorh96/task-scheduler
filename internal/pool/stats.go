@@ -1,10 +1,10 @@
 ﻿package pool
 
 type Stats struct {
-	TotalWorkers  int
-	ActiveWorkers int
-	IdleWorkers   int
-	QueueDepth    int
-	JobsCompleted int
-	JobsFailed    int
+	TotalWorkers  int `json:"total_workers"`
+	ActiveWorkers int `json:"active_workers"`
+	IdleWorkers   int `json:"idle_workers"`
+	QueueDepth    int `json:"queue_depth"`
+	JobsCompleted int `json:"jobs_completed"`
+	JobsFailed    int `json:"jobs_failed"`
 }

@@ -4,8 +4,6 @@ import (
 	"container/heap"
 	"sync"
 	"time"
-
-	"github.com/tomtorh96/task-scheduler/internal/pool"
 )
 
 type PriorityQueue struct {
@@ -67,7 +65,7 @@ func (pq *PriorityQueue) Pop() any {
 
 // wraps job in an Item, sets Priority and EnqueuedAt, calls heap.Push
 // locks the mutex, signals cond to wake a waiting worker
-func (pq *PriorityQueue) Enqueue(job *pool.Job, priority int) {
+func (pq *PriorityQueue) Enqueue(job any, priority int) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 	item := &Item{
@@ -89,7 +87,7 @@ func (pq *PriorityQueue) Close() {
 // blocks if queue is empty (waits on cond)
 // once an item is available, calls heap.Pop and returns the job
 // locks the mutex while accessing the heap
-func (pq *PriorityQueue) Dequeue() (*pool.Job, bool) {
+func (pq *PriorityQueue) Dequeue() (any, bool) {
 	pq.mu.Lock()
 	defer pq.mu.Unlock()
 	for pq.Len() == 0 {
@@ -101,5 +99,5 @@ func (pq *PriorityQueue) Dequeue() (*pool.Job, bool) {
 	if pq.isClosed {
 		return nil, false
 	}
-	return pq.Pop().(*Item).Job, true
+	return heap.Pop(pq).(*Item).Job, true
 }

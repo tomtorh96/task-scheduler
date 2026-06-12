@@ -4,22 +4,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomtorh96/task-scheduler/internal/metrics"
 	"github.com/tomtorh96/task-scheduler/internal/queue"
 	"github.com/tomtorh96/task-scheduler/pkg/backoff"
 )
 
 type Worker struct {
-	ID     int
-	jobs   chan *Job
-	quit   chan struct{}
-	queue  *queue.PriorityQueue
-	active bool
-	mutex  sync.Mutex
+	ID         int
+	jobs       chan *Job
+	quit       chan struct{}
+	queue      *queue.PriorityQueue
+	active     bool
+	mutex      sync.Mutex
+	onComplete func() // called when job succeeds
+	onFailed   func() // called when job permanently fails
 }
 
 // creates a new worker with the given ID, wires it to the shared job channel'
-func NewWorker(id int, jobs chan *Job, q *queue.PriorityQueue) *Worker {
-	var new_worker = &Worker{ID: id, jobs: jobs, quit: make(chan struct{}), queue: q}
+func NewWorker(id int, jobs chan *Job, q *queue.PriorityQueue, onComplete func(), onFailed func()) *Worker {
+	var new_worker = &Worker{ID: id, jobs: jobs, quit: make(chan struct{}), queue: q, onComplete: onComplete, onFailed: onFailed}
 
 	return new_worker
 }
@@ -39,12 +42,17 @@ func (w *Worker) Start() {
 				w.active = true
 				job.Status = StatusRunning
 				job.StartedAt = time.Now()
+				metrics.JobQueueWait.Observe(time.Since(job.CreatedAt).Seconds())
+				metrics.ActiveWorkers.Inc()
 				w.mutex.Unlock()
 
 				err := job.Fn()
 				w.mutex.Lock()
+				metrics.JobDuration.Observe(time.Since(job.StartedAt).Seconds())
+				metrics.ActiveWorkers.Dec()
+				metrics.QueueDepth.Dec()
+				job.Attempt++
 				if err != nil {
-					job.Attempt++
 					if job.Attempt < job.MaxRetries {
 						delay := backoff.Calculate(job.Attempt, backoff.DefaultConfig())
 						go func() {
@@ -54,9 +62,15 @@ func (w *Worker) Start() {
 					} else {
 						job.Status = StatusFailed
 						job.Err = err
+						job.FinishedAt = time.Now()
+						metrics.JobsFailed.Inc()
+						w.onFailed()
 					}
 				} else {
 					job.Status = StatusDone
+					job.FinishedAt = time.Now()
+					metrics.JobsCompleted.Inc()
+					w.onComplete()
 				}
 				w.active = false
 				w.mutex.Unlock()

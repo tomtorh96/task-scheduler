@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tomtorh96/task-scheduler/internal/api"
+	"github.com/tomtorh96/task-scheduler/internal/metrics"
 	"github.com/tomtorh96/task-scheduler/internal/scheduler"
 )
 
@@ -23,6 +24,7 @@ import (
 7. On signal received — gracefully shut down the HTTP server, then the scheduler
 */
 func main() {
+	metrics.Init()
 	bufferSize, err := strconv.Atoi(os.Getenv("APP_BUFFER_SIZE"))
 	if err != nil {
 		bufferSize = 100

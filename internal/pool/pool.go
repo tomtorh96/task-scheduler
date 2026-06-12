@@ -3,6 +3,7 @@
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tomtorh96/task-scheduler/internal/queue"
@@ -14,11 +15,13 @@ var (
 )
 
 type Pool struct {
-	workers []*Worker
-	jobs    chan *Job
-	queue   *queue.PriorityQueue
-	size    int
-	mu      sync.Mutex
+	workers       []*Worker
+	jobs          chan *Job
+	queue         *queue.PriorityQueue
+	size          int
+	mu            sync.Mutex
+	jobsCompleted int64
+	jobsFailed    int64
 }
 
 // creates a pool with `size` workers and a job channel with capacity `bufferSize`
@@ -26,7 +29,8 @@ func NewPool(size int, bufferSize int, q *queue.PriorityQueue) *Pool {
 	var new_pool = &Pool{size: size, jobs: make(chan *Job, bufferSize), queue: q}
 
 	for i := 0; i < size; i++ {
-		new_pool.workers = append(new_pool.workers, NewWorker(i, new_pool.jobs, new_pool.queue))
+		new_pool.workers = append(new_pool.workers, NewWorker(i, new_pool.jobs, new_pool.queue, func() { atomic.AddInt64(&new_pool.jobsCompleted, 1) },
+			func() { atomic.AddInt64(&new_pool.jobsFailed, 1) }))
 	}
 
 	return new_pool
@@ -53,7 +57,8 @@ func (p *Pool) Submit(job *Job) error {
 func (p *Pool) Resize(n int) error {
 	if n > p.size {
 		for i := p.size; i < n; i++ {
-			new_worker := NewWorker(i, p.jobs, p.queue)
+			new_worker := NewWorker(i, p.jobs, p.queue, func() { atomic.AddInt64(&p.jobsCompleted, 1) },
+				func() { atomic.AddInt64(&p.jobsFailed, 1) })
 			p.workers = append(p.workers, new_worker)
 			new_worker.Start()
 		}
@@ -103,6 +108,7 @@ func (p *Pool) Stats() Stats {
 	}
 	stats.ActiveWorkers = active_workers
 	stats.IdleWorkers = stats.TotalWorkers - stats.ActiveWorkers
-
+	stats.JobsCompleted = int(atomic.LoadInt64(&p.jobsCompleted))
+	stats.JobsFailed = int(atomic.LoadInt64(&p.jobsFailed))
 	return stats
 }
